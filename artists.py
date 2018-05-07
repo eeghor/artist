@@ -26,6 +26,8 @@ class Artist:
 		else:
 			self.artists = []
 
+		self.SONGKICK_API_KEY = json.load(open(f'{Artist.CRED_DIR}/songkick.json'))['songkick_api_key']
+
 	def get_genres(self, url='http://everynoise.com/everynoise1d.cgi?scope=all'):
 		"""
 		return a list of all genres from Every Noise at Once
@@ -125,6 +127,34 @@ class Artist:
 		res = sp.search(q='artist:' + name, type='artist', limit=3)
 
 		return res
+
+	def get_artist_from_songkick(self, name):
+		"""
+		get basic artist information from Songkick; it's not much, specifically:
+		{'displayName': 'Placebo',   # The artist name, as it is displayed on Songkick
+ 			'id': 324967,   # The Songkick ID of the artist
+ 			# MusicBrainz identifiers for this artist. It is possible that an artist has mutliple MusicBrainz IDs if we are not sure which is correct
+		 	'identifier': [{'eventsHref': 'http://api.songkick.com/api/3.0/artists/mbid:81b9963b-7ff7-47f7-9afb-fe454d8db43c/calendar.json',
+                 'href': 'http://api.songkick.com/api/3.0/artists/mbid:81b9963b-7ff7-47f7-9afb-fe454d8db43c.json',
+                 'mbid': '81b9963b-7ff7-47f7-9afb-fe454d8db43c',
+                 'setlistsHref': 'http://api.songkick.com/api/3.0/artists/mbid:81b9963b-7ff7-47f7-9afb-fe454d8db43c/setlists.json'},
+                {'eventsHref': 'http://api.songkick.com/api/3.0/artists/mbid:847e8284-8582-4b0e-9c26-b042a4f49e57/calendar.json',
+                 'href': 'http://api.songkick.com/api/3.0/artists/mbid:847e8284-8582-4b0e-9c26-b042a4f49e57.json',
+                 'mbid': '847e8284-8582-4b0e-9c26-b042a4f49e57',
+                 'setlistsHref': 'http://api.songkick.com/api/3.0/artists/mbid:847e8284-8582-4b0e-9c26-b042a4f49e57/setlists.json'}],
+ 		# The date until which this artist is on tour, in the form 'YYYY-MM-DD'. 'null' if this artist is not currently touring
+ 		'onTourUntil': '2018-06-23',
+ 		# The URI of the artist on Songkick
+ 		'uri': 'http://www.songkick.com/artists/324967-placebo?utm_source=45672&utm_medium=partner'}
+		"""
+		r = requests.get(f'http://api.songkick.com/api/3.0/search/artists.json?query={name}&apikey={self.SONGKICK_API_KEY}').text 
+
+		try:
+			res = json.loads(r)["resultsPage"]["results"]["artist"][0]  # take the top search result
+		except:
+			return {'name': None, 'id_sk': None}
+
+		return {'name': res['displayName'], 'id_sk': res['id']}
 	
 	def save(self, file_):
 	
@@ -293,10 +323,40 @@ class Artist:
 		print(f'now have {len(self.artists)} artists')
 
 		return self
+
+	def add_songkick_id(self):
+		"""
+		for every artist on the list try to find a Songkick id
+		"""
+		match_ = []
+		nomatch_ = []
+
+		t0 = time.time()
+
+		for i, artist_rec in enumerate(self.artists, 1):
+			name_ = artist_rec['name']
+			sk_art = self.get_artist_from_songkick(name_)
+			if sk_art['name']:
+				if self.normalise_name(sk_art['name']) == name_:
+					artist_rec.update({'id_sk': sk_art['id_sk']})
+					match_.append(name_)
+				else:
+					nomatch_.append(name_)
+			else:
+				nomatch_.append(name_)
+
+			if i%50 == 0:
+
+				print(f'looking for songkick ids: {i}/{len(self.artists)} ({100*i/len(self.artists):.2f}%) artists processed...')
+				print(f'matched {len(match_)}, didn\'t match {len(nomatch_)}')
+				print(f'time: {time.time() - t0:.0f} sec')
+
+		return self
 			
 if __name__ == '__main__':
   
   art = Artist().normalize_all()
   art.save('artists_n.json')
   art.drop_unpopular().save('artists_d.json')
+  art.add_songkick_id().save('artists_sk.json')
 
