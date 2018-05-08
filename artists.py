@@ -334,6 +334,7 @@ class Artist:
 		t0 = time.time()
 
 		for i, artist_rec in enumerate(self.artists, 1):
+
 			name_ = artist_rec['name']
 			sk_art = self.get_artist_from_songkick(name_)
 			if sk_art['name']:
@@ -345,18 +346,123 @@ class Artist:
 			else:
 				nomatch_.append(name_)
 
-			if i%50 == 0:
+			if i%100 == 0:
 
 				print(f'looking for songkick ids: {i}/{len(self.artists)} ({100*i/len(self.artists):.2f}%) artists processed...')
 				print(f'matched {len(match_)}, didn\'t match {len(nomatch_)}')
-				print(f'time: {time.time() - t0:.0f} sec')
+				print(f'time: {time.time() - t0:.0f} sec / 100')
+
+				t0 = time.time()
 
 		return self
+
+	def add_gigs(self):
+		"""
+		add gigography from Songkick; the response look like this:
+
+		{
+ 			"resultsPage": {
+   			"status": "ok",
+   			"results": { "event": [detailed gig descriptions here, dictionaries in this list]
+   						 },
+   			"perPage": 50,
+    		"page": 1,
+    		"totalEntries": 1179
+  							}
+		}
+
+		where gig descriptions are as below
+
+		"event": [
+        {
+          "type": "Concert",
+          "popularity": 0.189824,
+          "status": "ok",
+          "displayName": "Placebo at The Rock Garden (January 23, 1995)",
+          "start": {
+            "time": null,
+            "date": "1995-01-23",
+            "datetime": null
+          },
+          "location": {
+            "city": "London, UK",
+            "lat": 51.512061,
+            "lng": -0.1229647
+          },
+          "uri": "http://www.songkick.com/concerts/937131-placebo-at-rock-garden?utm_source=45672&utm_medium=partner",
+          "id": 937131,
+          "performance": [
+            {
+              "billingIndex": 1,
+              "billing": "headline",
+              "displayName": "Placebo",
+              "id": 1347942,
+              "artist": {
+                "displayName": "Placebo",
+                "identifier": [
+                  {
+                    "mbid": "81b9963b-7ff7-47f7-9afb-fe454d8db43c",
+                    "href": "http://api.songkick.com/api/3.0/artists/mbid:81b9963b-7ff7-47f7-9afb-fe454d8db43c.json"
+                  },
+                  {
+                    "mbid": "847e8284-8582-4b0e-9c26-b042a4f49e57",
+                    "href": "http://api.songkick.com/api/3.0/artists/mbid:847e8284-8582-4b0e-9c26-b042a4f49e57.json"
+                  }
+                ],
+                "uri": "http://www.songkick.com/artists/324967-placebo?utm_source=45672&utm_medium=partner",
+                "id": 324967
+              }
+            }
+          ],
+          "venue": {
+            "metroArea": {
+              "displayName": "London",
+              "country": {
+                "displayName": "UK"
+              },
+              "uri": "http://www.songkick.com/metro_areas/24426-uk-london?utm_source=45672&utm_medium=partner",
+              "id": 24426
+            },
+            "displayName": "The Rock Garden",
+            "lat": 51.512061,
+            "lng": -0.1229647,
+            "uri": "http://www.songkick.com/venues/35994-rock-garden?utm_source=45672&utm_medium=partner",
+            "id": 35994
+          },
+          "ageRestriction": null
+        }, 
+		"""
+
+		for i, artist_rec in enumerate(self.artists, 1):
+
+			id_sk = artist_rec.get('id_sk', None)
+
+			if id_sk:
+
+				r = json.loads(requests.get(f'http://api.songkick.com/api/3.0/artists/{id_sk}/gigography.json?apikey={self.SONGKICK_API_KEY}').text)
+
+				if 'resultsPage' in r:
+					if 'results' in r['resultsPage']:
+						if 'event' in r['resultsPage']['results']:
+							artist_rec.update({'gigs': r['resultsPage']['results']['event']})
+
+			if i%100 == 0:
+				print(f'looking for gigs: {i}/{len(self.artists)} ({100*i/len(self.artists):.2f}%) artists processed...')
+
+			if i%1000 == 0:
+				json.dump(self.artists[(i-1000):i], open(f'artdump_{i}.json','w'))
+
+		return self
+
 			
 if __name__ == '__main__':
   
   art = Artist().normalize_all()
   art.save('artists_n.json')
-  art.drop_unpopular().save('artists_d.json')
-  art.add_songkick_id().save('artists_sk.json')
+  art.drop_unpopular()
+  art.save('artists_d.json')
+  art.add_songkick_id()
+  art.save('artists_sk.json')
+  art.add_gigs()
+  art.save('placebo_test.json')
 
