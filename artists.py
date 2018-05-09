@@ -243,7 +243,7 @@ class Artist:
 		name = re.sub(r'[\[\]\{\}\(\)]','', name) 
 		
 		# remove the and a
-		name = re.sub(r'(the|a)\s+','', name)
+		name = re.sub(r'^(the|a)\s+','', name)
 
 		# remove multiple whitespaces
 		name = wsp.sub(' ',name)
@@ -497,7 +497,7 @@ class Artist:
 		"""
 		client = soundcloud.Client(client_id=self.SOUNDCLOUD_API_KEY)
 
-		for i, artist_rec in enumerate(self.artists[:10], 1):
+		for i, artist_rec in enumerate(self.artists, 1):
 
 			name_ = artist_rec['name']
 
@@ -507,22 +507,23 @@ class Artist:
 				print(f'couldn\'t find {name_}...')
 				continue
 
-			print(f'found {name_}..')
+			avail_fields = set(res.fields())
+			
+			for c in 'full_name username'.split():
 
-			avail_fields = res.fields()
+				if (c in avail_fields) and (self.normalise_name(getattr(res, c)) == name_):
 
-			if ('full_name' in avail_fields) and (self.normalise_name(res.full_name) == name_):
-
-				print('can update')
-				for field_orig, field_new in zip('country city followers_count id permalink_url website'.split(),
-												 'country city followers_soundcloud id_sc url_sc website'.split()):
-					if field_orig in avail_fields:
-						artist_rec.update({field_new: getattr(res, field_orig).lower()})
-
-				pprint(artist_rec)
+					for field_orig, field_new in zip('country city followers_count id permalink_url website'.split(),
+												 		'country city followers_soundcloud id_sc url_sc website'.split()):
+						if field_orig in avail_fields:
+							_ = getattr(res, field_orig)
+							if isinstance(_, int):
+								artist_rec.update({field_new: _})
+							elif isinstance(_, str) and (len(_) > 1):
+								artist_rec.update({field_new: _.lower()})
+					break
 			else:
-				print('no name?')
-				print(avail_fields)
+				print('name doesn\'t match..')
 
 		return self
 
@@ -533,12 +534,12 @@ if __name__ == '__main__':
   
   art = Artist().normalize_all()
   art.save('artists_n.json')
-  # art.drop_unpopular()
-  # art.save('artists_d.json')
-  # art.add_songkick_id()
-  # art.save('artists_sk.json')
-  # art.add_gigs()
-  # art.save('artists_gig.json')
+  art.drop_unpopular()
+  art.save('artists_d.json')
+  art.add_songkick_id()
+  art.save('artists_sk.json')
+  art.add_gigs()
+  art.save('artists_gig.json')
   art.get_soundcloud()
-  # art.save('artists_sc.json')
+  art.save('artists_sc.json')
 
