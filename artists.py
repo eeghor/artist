@@ -8,6 +8,7 @@ import time
 import sys
 import os
 from pprint import pprint
+import soundcloud
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 
@@ -27,6 +28,7 @@ class Artist:
 			self.artists = []
 
 		self.SONGKICK_API_KEY = json.load(open(f'{Artist.CRED_DIR}/songkick.json'))['songkick_api_key']
+		self.SOUNDCLOUD_API_KEY = json.load(open(f'{Artist.CRED_DIR}/soundcloud.json'))['client_id']
 
 	def get_genres(self, url='http://everynoise.com/everynoise1d.cgi?scope=all'):
 		"""
@@ -454,15 +456,89 @@ class Artist:
 
 		return self
 
+	def get_soundcloud(self):
+		"""
+		collect information from Soundcloud; a sample of what's available:
+
+		{'avatar_url': 'https://i1.sndcdn.com/avatars-000277022323-bbsjso-large.jpg',
+			'city': 'Kassel',
+			'comments_count': 0,
+			'country': 'Germany',
+			'description': 'Official Soundcloud for Milky Chance\n'
+			               '\n'
+			               'Management:\n'
+			               'Björn Deparade (bjoern@wasted-talent.com)',
+			'discogs_name': None,
+			'first_name': 'Milky',
+			'followers_count': 115133,
+			'followings_count': 16,
+			'full_name': 'Milky Chance',
+			'id': 77545348,
+			'kind': 'user',
+			'last_modified': '2017/06/13 17:02:12 +0000',
+			'last_name': 'Chance',
+			'likes_count': 0,
+			'myspace_name': None,
+			'online': False,
+			'permalink': 'milkychance',
+			'permalink_url': 'http://soundcloud.com/milkychance',
+			'plan': 'Pro Unlimited',
+			'playlist_count': 4,
+			'public_favorites_count': 0,
+			'reposts_count': 1,
+			'subscriptions': [{'product': {'id': 'creator-pro-unlimited',
+			                               'name': 'Pro Unlimited'}}],
+			'track_count': 55,
+			'uri': 'https://api.soundcloud.com/users/77545348',
+			'username': 'Milky Chance',
+			'website': 'http://www.milkychanceofficial.com',
+			'website_title': 'International Website'}
+
+		"""
+		client = soundcloud.Client(client_id=self.SOUNDCLOUD_API_KEY)
+
+		for i, artist_rec in enumerate(self.artists[:10], 1):
+
+			name_ = artist_rec['name']
+
+			try:
+				res = client.get('/users', q=name_)[0]
+			except:
+				print(f'couldn\'t find {name_}...')
+				continue
+
+			print(f'found {name_}..')
+
+			avail_fields = res.fields()
+
+			if ('full_name' in avail_fields) and (self.normalise_name(res.full_name) == name_):
+
+				print('can update')
+				for field_orig, field_new in zip('country city followers_count id permalink_url website'.split(),
+												 'country city followers_soundcloud id_sc url_sc website'.split()):
+					if field_orig in avail_fields:
+						artist_rec.update({field_new: getattr(res, field_orig).lower()})
+
+				pprint(artist_rec)
+			else:
+				print('no name?')
+				print(avail_fields)
+
+		return self
+
+
+
 			
 if __name__ == '__main__':
   
   art = Artist().normalize_all()
   art.save('artists_n.json')
-  art.drop_unpopular()
-  art.save('artists_d.json')
-  art.add_songkick_id()
-  art.save('artists_sk.json')
-  art.add_gigs()
-  art.save('placebo_test.json')
+  # art.drop_unpopular()
+  # art.save('artists_d.json')
+  # art.add_songkick_id()
+  # art.save('artists_sk.json')
+  # art.add_gigs()
+  # art.save('artists_gig.json')
+  art.get_soundcloud()
+  # art.save('artists_sc.json')
 
