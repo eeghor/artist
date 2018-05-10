@@ -4,6 +4,7 @@ from itertools import chain
 from collections import OrderedDict, defaultdict, Counter
 import requests
 from bs4 import BeautifulSoup
+import xml.etree.ElementTree as et
 import time
 import sys
 import os
@@ -17,6 +18,8 @@ class Artist:
 	CRED_DIR = 'credentials'
 	DATA_DIR = 'data'
 
+	MEDIA = 'facebook twitter youtube wikipedia soundcloud equipboard instagram'.split()
+
 	def __init__(self, refresh=False):
 
 		self.refresh = refresh
@@ -29,6 +32,8 @@ class Artist:
 
 		self.SONGKICK_API_KEY = json.load(open(f'{Artist.CRED_DIR}/songkick.json'))['songkick_api_key']
 		self.SOUNDCLOUD_API_KEY = json.load(open(f'{Artist.CRED_DIR}/soundcloud.json'))['client_id']
+
+		self.DISCOGS_DUMP = f'{Artist.DATA_DIR}/discogs_20180401_artists.xml'
 
 	def get_genres(self, url='http://everynoise.com/everynoise1d.cgi?scope=all'):
 		"""
@@ -526,6 +531,84 @@ class Artist:
 				print('name doesn\'t match..')
 
 		return self
+
+	def get_discogs(self):
+
+		def __find(element, child_name):
+		
+		    try:
+		        child = element.find(child_name).text.lower().strip()
+		    except:
+		        child = None
+		    return child
+		
+		def __find_kids(element, child_name, grandchild_name):
+		
+		    try:
+		        child = element.find(child_name)
+		    except:
+		        # if there's no child not much sense to proceed
+		        return None
+		
+		    if not child:
+		        return None
+		
+		    try:
+		        grandchildren = child.findall(grandchild_name)
+		    except:
+		        # what if grandchildren are missing
+		        return None
+		
+		    if not grandchildren:
+		        return None
+		
+		    return [v.text.lower().strip() for v in grandchildren if v.text]
+		
+		
+		artist_lst = []
+		
+		c = 0
+		
+		# parses an XML section into an element tree incrementally, returns an iterator providing (event, elem) pairs
+		# events is a list of events to report back
+		for ev, a in et.iterparse(self.DISCOGS_DUMP, events=("start", "end")):
+		
+		    if (a.tag == "artist") and (ev == "end"):
+		        
+		        # found some artist's information; make a dictionary to collect
+		        art_dict = defaultdict()
+		    
+		        art_dict["name"] = __find(a, "name")
+		        art_dict["real_name"] = __find(a, "realname")
+		        
+		        art_dict["name_variations"] = __find_kids(a, "namevariations", "name")
+		        art_dict["aliases"] = __find_kids(a, "aliases", "name")
+		        
+		        artist_urls = __find_kids(a, "urls", "url")
+
+		        art_dict["media"] = {}
+		        
+		        if artist_urls:
+		            
+		            for u in artist_urls:
+
+		            	for m in Artist.MEDIA:
+		                	if m in u:
+		                    	art_dict['media'].update({m: u})
+		        else:
+		            continue  # no media - we aren't interested; next
+		        
+		        artist_lst.append(art_dict)
+		
+		        if len(artist_lst) == 20000:
+		
+		            c += 1
+		            json.dump(artist_lst, open("data/AD{:.0f}.json".format(c), "w"), sort_keys=False, indent=4)
+		            artist_lst = []
+		
+		if artist_lst:
+		    json.dump(artist_lst, open("data/AD{:.0f}.json".format(c + 1), "w"), sort_keys=False, indent=4)
+
 
 
 
