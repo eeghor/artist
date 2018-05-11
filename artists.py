@@ -18,7 +18,7 @@ class Artist:
 	CRED_DIR = 'credentials'
 	DATA_DIR = 'data'
 
-	MEDIA = 'facebook twitter youtube wikipedia soundcloud equipboard instagram'.split()
+	MEDIA = 'facebook twitter youtube wikipedia soundcloud equipboard instagram last.fm'.split()
 
 	def __init__(self, refresh=False):
 
@@ -139,20 +139,20 @@ class Artist:
 		"""
 		get basic artist information from Songkick; it's not much, specifically:
 		{'displayName': 'Placebo',   # The artist name, as it is displayed on Songkick
- 			'id': 324967,   # The Songkick ID of the artist
- 			# MusicBrainz identifiers for this artist. It is possible that an artist has mutliple MusicBrainz IDs if we are not sure which is correct
-		 	'identifier': [{'eventsHref': 'http://api.songkick.com/api/3.0/artists/mbid:81b9963b-7ff7-47f7-9afb-fe454d8db43c/calendar.json',
-                 'href': 'http://api.songkick.com/api/3.0/artists/mbid:81b9963b-7ff7-47f7-9afb-fe454d8db43c.json',
-                 'mbid': '81b9963b-7ff7-47f7-9afb-fe454d8db43c',
-                 'setlistsHref': 'http://api.songkick.com/api/3.0/artists/mbid:81b9963b-7ff7-47f7-9afb-fe454d8db43c/setlists.json'},
-                {'eventsHref': 'http://api.songkick.com/api/3.0/artists/mbid:847e8284-8582-4b0e-9c26-b042a4f49e57/calendar.json',
-                 'href': 'http://api.songkick.com/api/3.0/artists/mbid:847e8284-8582-4b0e-9c26-b042a4f49e57.json',
-                 'mbid': '847e8284-8582-4b0e-9c26-b042a4f49e57',
-                 'setlistsHref': 'http://api.songkick.com/api/3.0/artists/mbid:847e8284-8582-4b0e-9c26-b042a4f49e57/setlists.json'}],
- 		# The date until which this artist is on tour, in the form 'YYYY-MM-DD'. 'null' if this artist is not currently touring
- 		'onTourUntil': '2018-06-23',
- 		# The URI of the artist on Songkick
- 		'uri': 'http://www.songkick.com/artists/324967-placebo?utm_source=45672&utm_medium=partner'}
+			'id': 324967,   # The Songkick ID of the artist
+			# MusicBrainz identifiers for this artist. It is possible that an artist has mutliple MusicBrainz IDs if we are not sure which is correct
+			'identifier': [{'eventsHref': 'http://api.songkick.com/api/3.0/artists/mbid:81b9963b-7ff7-47f7-9afb-fe454d8db43c/calendar.json',
+				 'href': 'http://api.songkick.com/api/3.0/artists/mbid:81b9963b-7ff7-47f7-9afb-fe454d8db43c.json',
+				 'mbid': '81b9963b-7ff7-47f7-9afb-fe454d8db43c',
+				 'setlistsHref': 'http://api.songkick.com/api/3.0/artists/mbid:81b9963b-7ff7-47f7-9afb-fe454d8db43c/setlists.json'},
+				{'eventsHref': 'http://api.songkick.com/api/3.0/artists/mbid:847e8284-8582-4b0e-9c26-b042a4f49e57/calendar.json',
+				 'href': 'http://api.songkick.com/api/3.0/artists/mbid:847e8284-8582-4b0e-9c26-b042a4f49e57.json',
+				 'mbid': '847e8284-8582-4b0e-9c26-b042a4f49e57',
+				 'setlistsHref': 'http://api.songkick.com/api/3.0/artists/mbid:847e8284-8582-4b0e-9c26-b042a4f49e57/setlists.json'}],
+		# The date until which this artist is on tour, in the form 'YYYY-MM-DD'. 'null' if this artist is not currently touring
+		'onTourUntil': '2018-06-23',
+		# The URI of the artist on Songkick
+		'uri': 'http://www.songkick.com/artists/324967-placebo?utm_source=45672&utm_medium=partner'}
 		"""
 		r = requests.get(f'http://api.songkick.com/api/3.0/search/artists.json?query={name}&apikey={self.SONGKICK_API_KEY}').text 
 
@@ -273,8 +273,8 @@ class Artist:
 			print('the artist list is empty!')
 			raise AssertionError
 
-		for artist_rec in self.artists:
-			artist_rec['name'] = self.normalise_name(artist_rec['name'])
+		for rc in self.artists:
+			rc['name'] = self.normalise_name(rc['name'])
 
 		return self
 
@@ -289,41 +289,41 @@ class Artist:
 
 		art_before = len(self.artists)
 
-		self.artists = [artist_rec for artist_rec in self.artists if artist_rec['popularity'] > 0]
+		self.artists = [rc for rc in self.artists if rc['popularity'] > 0]
 
 		art_after = len(self.artists)
 
 		print(f'removed {art_after - art_before} unpopular artists...')
 
 
-		names_ambig = {k: v for k, v in Counter([artist_rec['name'] for artist_rec in self.artists]).items() if v > 1}
+		names_ambig = {k: v for k, v in Counter([rc['name'] for rc in self.artists]).items() if v > 1}
 
 		print(f'found {len(names_ambig)} ambiguous artist names...')
 
 		name_ids_keep = {}
 
-		for artist_rec in self.artists:
+		for rc in self.artists:
 
-			name_ = artist_rec['name']
+			name_ = rc['name']
 
 			if name_ in names_ambig:
 				if name_ not in name_ids_keep:
-					name_ids_keep.update({name_: {'id': artist_rec['id'], 
-													'popularity': artist_rec['popularity']}})
+					name_ids_keep.update({name_: {'id': rc['id'], 
+													'popularity': rc['popularity']}})
 				else:
-					if name_ids_keep[name_]['popularity'] < artist_rec['popularity']:
-						name_ids_keep.update({name_: {'id': artist_rec['id'], 
-														'popularity': artist_rec['popularity']}})
+					if name_ids_keep[name_]['popularity'] < rc['popularity']:
+						name_ids_keep.update({name_: {'id': rc['id'], 
+														'popularity': rc['popularity']}})
 
 		dic_ = []
 
-		for artist_rec in self.artists:
+		for rc in self.artists:
 
-			if artist_rec['name'] in name_ids_keep:  # name is ambiguous
-				if artist_rec['id'] == name_ids_keep[artist_rec['name']]['id']:
-					dic_.append(artist_rec)
+			if rc['name'] in name_ids_keep:  # name is ambiguous
+				if rc['id'] == name_ids_keep[rc['name']]['id']:
+					dic_.append(rc)
 			else:
-				dic_.append(artist_rec)
+				dic_.append(rc)
 
 		self.artists = dic_
 
@@ -340,13 +340,13 @@ class Artist:
 
 		t0 = time.time()
 
-		for i, artist_rec in enumerate(self.artists, 1):
+		for i, rc in enumerate(self.artists, 1):
 
-			name_ = artist_rec['name']
+			name_ = rc['name']
 			sk_art = self.get_artist_from_songkick(name_)
 			if sk_art['name']:
 				if self.normalise_name(sk_art['name']) == name_:
-					artist_rec.update({'id_sk': sk_art['id_sk']})
+					rc.update({'id_sk': sk_art['id_sk']})
 					match_.append(name_)
 				else:
 					nomatch_.append(name_)
@@ -368,81 +368,89 @@ class Artist:
 		add gigography from Songkick; the response look like this:
 
 		{
- 			"resultsPage": {
-   			"status": "ok",
-   			"results": { "event": [detailed gig descriptions here, dictionaries in this list]
-   						 },
-   			"perPage": 50,
-    		"page": 1,
-    		"totalEntries": 1179
-  							}
+			"resultsPage": {
+			"status": "ok",
+			"results": { "event": [detailed gig descriptions here, dictionaries in this list]
+						 },
+			"perPage": 50,
+			"page": 1,
+			"totalEntries": 1179
+							}
 		}
 
 		where gig descriptions are as below
 
 		"event": [
-        {
-          "type": "Concert",
-          "popularity": 0.189824,
-          "status": "ok",
-          "displayName": "Placebo at The Rock Garden (January 23, 1995)",
-          "start": {
-            "time": null,
-            "date": "1995-01-23",
-            "datetime": null
-          },
-          "location": {
-            "city": "London, UK",
-            "lat": 51.512061,
-            "lng": -0.1229647
-          },
-          "uri": "http://www.songkick.com/concerts/937131-placebo-at-rock-garden?utm_source=45672&utm_medium=partner",
-          "id": 937131,
-          "performance": [
-            {
-              "billingIndex": 1,
-              "billing": "headline",
-              "displayName": "Placebo",
-              "id": 1347942,
-              "artist": {
-                "displayName": "Placebo",
-                "identifier": [
-                  {
-                    "mbid": "81b9963b-7ff7-47f7-9afb-fe454d8db43c",
-                    "href": "http://api.songkick.com/api/3.0/artists/mbid:81b9963b-7ff7-47f7-9afb-fe454d8db43c.json"
-                  },
-                  {
-                    "mbid": "847e8284-8582-4b0e-9c26-b042a4f49e57",
-                    "href": "http://api.songkick.com/api/3.0/artists/mbid:847e8284-8582-4b0e-9c26-b042a4f49e57.json"
-                  }
-                ],
-                "uri": "http://www.songkick.com/artists/324967-placebo?utm_source=45672&utm_medium=partner",
-                "id": 324967
-              }
-            }
-          ],
-          "venue": {
-            "metroArea": {
-              "displayName": "London",
-              "country": {
-                "displayName": "UK"
-              },
-              "uri": "http://www.songkick.com/metro_areas/24426-uk-london?utm_source=45672&utm_medium=partner",
-              "id": 24426
-            },
-            "displayName": "The Rock Garden",
-            "lat": 51.512061,
-            "lng": -0.1229647,
-            "uri": "http://www.songkick.com/venues/35994-rock-garden?utm_source=45672&utm_medium=partner",
-            "id": 35994
-          },
-          "ageRestriction": null
-        }, 
+		{
+		  "type": "Concert",
+		  "popularity": 0.189824,
+		  "status": "ok",
+		  "displayName": "Placebo at The Rock Garden (January 23, 1995)",
+		  "start": {
+			"time": null,
+			"date": "1995-01-23",
+			"datetime": null
+		  },
+		  "location": {
+			"city": "London, UK",
+			"lat": 51.512061,
+			"lng": -0.1229647
+		  },
+		  "uri": "http://www.songkick.com/concerts/937131-placebo-at-rock-garden?utm_source=45672&utm_medium=partner",
+		  "id": 937131,
+		  "performance": [
+			{
+			  "billingIndex": 1,
+			  "billing": "headline",
+			  "displayName": "Placebo",
+			  "id": 1347942,
+			  "artist": {
+				"displayName": "Placebo",
+				"identifier": [
+				  {
+					"mbid": "81b9963b-7ff7-47f7-9afb-fe454d8db43c",
+					"href": "http://api.songkick.com/api/3.0/artists/mbid:81b9963b-7ff7-47f7-9afb-fe454d8db43c.json"
+				  },
+				  {
+					"mbid": "847e8284-8582-4b0e-9c26-b042a4f49e57",
+					"href": "http://api.songkick.com/api/3.0/artists/mbid:847e8284-8582-4b0e-9c26-b042a4f49e57.json"
+				  }
+				],
+				"uri": "http://www.songkick.com/artists/324967-placebo?utm_source=45672&utm_medium=partner",
+				"id": 324967
+			  }
+			}
+		  ],
+		  "venue": {
+			"metroArea": {
+			  "displayName": "London",
+			  "country": {
+				"displayName": "UK"
+			  },
+			  "uri": "http://www.songkick.com/metro_areas/24426-uk-london?utm_source=45672&utm_medium=partner",
+			  "id": 24426
+			},
+			"displayName": "The Rock Garden",
+			"lat": 51.512061,
+			"lng": -0.1229647,
+			"uri": "http://www.songkick.com/venues/35994-rock-garden?utm_source=45672&utm_medium=partner",
+			"id": 35994
+		  },
+		  "ageRestriction": null
+		}, 
 		"""
 
-		for i, artist_rec in enumerate(self.artists, 1):
+		
+		try:
+			self.artists = json.load(open(f'{Artist.DATA_DIR}/artists_sk.json'))
+			print(f'working with {len(self.artists)} artists')
+		except:
+			print('no file found')
+			sys.exit(0)
 
-			id_sk = artist_rec.get('id_sk', None)
+		for i, rc in enumerate(self.artists, 1):
+
+			id_sk = rc.get('id_sk', None)
 
 			if id_sk:
 
@@ -451,7 +459,7 @@ class Artist:
 				if 'resultsPage' in r:
 					if 'results' in r['resultsPage']:
 						if 'event' in r['resultsPage']['results']:
-							artist_rec.update({'gigs': r['resultsPage']['results']['event']})
+							rc.update({'gigs': r['resultsPage']['results']['event']})
 
 			if i%100 == 0:
 				print(f'looking for gigs: {i}/{len(self.artists)} ({100*i/len(self.artists):.2f}%) artists processed...')
@@ -470,9 +478,9 @@ class Artist:
 			'comments_count': 0,
 			'country': 'Germany',
 			'description': 'Official Soundcloud for Milky Chance\n'
-			               '\n'
-			               'Management:\n'
-			               'Björn Deparade (bjoern@wasted-talent.com)',
+						   '\n'
+						   'Management:\n'
+						   'Björn Deparade (bjoern@wasted-talent.com)',
 			'discogs_name': None,
 			'first_name': 'Milky',
 			'followers_count': 115133,
@@ -492,7 +500,7 @@ class Artist:
 			'public_favorites_count': 0,
 			'reposts_count': 1,
 			'subscriptions': [{'product': {'id': 'creator-pro-unlimited',
-			                               'name': 'Pro Unlimited'}}],
+										   'name': 'Pro Unlimited'}}],
 			'track_count': 55,
 			'uri': 'https://api.soundcloud.com/users/77545348',
 			'username': 'Milky Chance',
@@ -502,9 +510,9 @@ class Artist:
 		"""
 		client = soundcloud.Client(client_id=self.SOUNDCLOUD_API_KEY)
 
-		for i, artist_rec in enumerate(self.artists, 1):
+		for i, rc in enumerate(self.artists, 1):
 
-			name_ = artist_rec['name']
+			name_ = rc['name']
 
 			try:
 				res = client.get('/users', q=name_)[0]
@@ -519,13 +527,13 @@ class Artist:
 				if (c in avail_fields) and (self.normalise_name(getattr(res, c)) == name_):
 
 					for field_orig, field_new in zip('country city followers_count id permalink_url website'.split(),
-												 		'country city followers_soundcloud id_sc url_sc website'.split()):
+														'country city followers_soundcloud id_sc url_sc website'.split()):
 						if field_orig in avail_fields:
 							_ = getattr(res, field_orig)
 							if isinstance(_, int):
-								artist_rec.update({field_new: _})
+								rc.update({field_new: _})
 							elif isinstance(_, str) and (len(_) > 1):
-								artist_rec.update({field_new: _.lower()})
+								rc.update({field_new: _.lower()})
 					break
 			else:
 				print('name doesn\'t match..')
@@ -536,33 +544,33 @@ class Artist:
 
 		def __find(element, child_name):
 		
-		    try:
-		        child = element.find(child_name).text.lower().strip()
-		    except:
-		        child = None
-		    return child
+			try:
+				child = element.find(child_name).text.lower().strip()
+			except:
+				child = None
+			return child
 		
 		def __find_kids(element, child_name, grandchild_name):
 		
-		    try:
-		        child = element.find(child_name)
-		    except:
-		        # if there's no child not much sense to proceed
-		        return None
+			try:
+				child = element.find(child_name)
+			except:
+				# if there's no child not much sense to proceed
+				return None
 		
-		    if not child:
-		        return None
+			if not child:
+				return None
 		
-		    try:
-		        grandchildren = child.findall(grandchild_name)
-		    except:
-		        # what if grandchildren are missing
-		        return None
+			try:
+				grandchildren = child.findall(grandchild_name)
+			except:
+				# what if grandchildren are missing
+				return None
 		
-		    if not grandchildren:
-		        return None
+			if not grandchildren:
+				return None
 		
-		    return [v.text.lower().strip() for v in grandchildren if v.text]
+			return [v.text.lower().strip() for v in grandchildren if v.text]
 		
 		
 		artist_lst = []
@@ -573,41 +581,35 @@ class Artist:
 		# events is a list of events to report back
 		for ev, a in et.iterparse(self.DISCOGS_DUMP, events=("start", "end")):
 		
-		    if (a.tag == "artist") and (ev == "end"):
-		        
-		        # found some artist's information; make a dictionary to collect
-		        art_dict = defaultdict()
-		    
-		        art_dict["name"] = __find(a, "name")
-		        art_dict["real_name"] = __find(a, "realname")
-		        
-		        art_dict["name_variations"] = __find_kids(a, "namevariations", "name")
-		        art_dict["aliases"] = __find_kids(a, "aliases", "name")
-		        
-		        artist_urls = __find_kids(a, "urls", "url")
+			if (a.tag == "artist") and (ev == "end"):
+				
+				# found some artist's information; make a dictionary to collect
+				art_dict = defaultdict()
+			
+				art_dict["name"] = __find(a, "name")
+				art_dict["real_name"] = __find(a, "realname")
+				
+				art_dict["name_variations"] = __find_kids(a, "namevariations", "name")
+				art_dict["aliases"] = __find_kids(a, "aliases", "name")
+				
+				artist_urls = __find_kids(a, "urls", "url")
 
-		        art_dict["media"] = {}
-		        
-		        if artist_urls:
-		            
-		            for u in artist_urls:
+				art_dict["media"] = {}
+				
+				if artist_urls:
+					
+					for u in artist_urls:
 
-		            	for m in Artist.MEDIA:
-		                	if m in u:
-		                    	art_dict['media'].update({m: u})
-		        else:
-		            continue  # no media - we aren't interested; next
-		        
-		        artist_lst.append(art_dict)
+						for m in Artist.MEDIA:
+							if m in u:
+								art_dict['media'].update({m: u})
+				else:
+					continue  # no media - we aren't interested; next
+				
+				artist_lst.append(art_dict)
 		
-		        if len(artist_lst) == 20000:
 		
-		            c += 1
-		            json.dump(artist_lst, open("data/AD{:.0f}.json".format(c), "w"), sort_keys=False, indent=4)
-		            artist_lst = []
-		
-		if artist_lst:
-		    json.dump(artist_lst, open("data/AD{:.0f}.json".format(c + 1), "w"), sort_keys=False, indent=4)
+		json.dump(artist_lst, open(f'{Artist.DATA_DIR}/discogs_.json', "w"), indent=4)
 
 
 
@@ -615,14 +617,16 @@ class Artist:
 			
 if __name__ == '__main__':
   
-  art = Artist().normalize_all()
-  art.save('artists_n.json')
-  art.drop_unpopular()
-  art.save('artists_d.json')
-  art.add_songkick_id()
-  art.save('artists_sk.json')
+  art = Artist()
+  # art.normalize_all()
+  # art.save('artists_n.json')
+  # art.drop_unpopular()
+  # art.save('artists_d.json')
+  # art.add_songkick_id()
+  # art.save('artists_sk.json')
   art.add_gigs()
   art.save('artists_gig.json')
-  art.get_soundcloud()
-  art.save('artists_sc.json')
+  # art.get_soundcloud()
+  # art.save('artists_sc.json')
+  # art.get_discogs()
 
