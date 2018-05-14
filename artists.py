@@ -23,22 +23,32 @@ class Artist:
 
 	MEDIA = 'facebook twitter youtube wikipedia soundcloud equipboard instagram last.fm'.split()
 
-	def __init__(self, refresh=False):
+	def __init__(self, refresh=False, artist_file=None):
 
 		self.refresh = refresh
+		self.artist_file = artist_file
 
 		if not self.refresh:
-			self.artists = json.load(open(f'{Artist.DATA_DIR}/artists_.json'))
-			print(f'loaded {len(self.artists)} artists from artists_.json')
+			self.artists = json.load(open(f'{Artist.DATA_DIR}/{self.artist_file}'))
+			print(f'loaded {len(self.artists)} artists from {self.artist_file}')
 		else:
 			self.artists = []
 
 		self.SONGKICK_API_KEY = json.load(open(f'{Artist.CRED_DIR}/songkick.json'))['songkick_api_key']
 		self.SOUNDCLOUD_API_KEY = json.load(open(f'{Artist.CRED_DIR}/soundcloud.json'))['client_id']
+		self.CREDENTIALS_S3 = json.load(open(f'{Artist.CRED_DIR}/s3.json'))
 
 		self.DISCOGS_DUMP = f'{Artist.DATA_DIR}/discogs_20180401_artists.xml'
 
-		self.CREDENTIALS_S3 = json.load(open(f'{Artist.CRED_DIR}/s3.json'))
+		self.GIGERROR_ARTISTS = []
+
+		# note that the names of gold/platinum artists get normalized straight away
+		self.goldplatinum = [self.normalise_name(l.strip()) for l in open(f'{Artist.DATA_DIR}/goldplatinum-artists.txt','r').readlines() if l.strip()]
+		self.billboard = [self.normalise_name(l.strip()) for l in open(f'{Artist.DATA_DIR}/billboard_artists.txt','r').readlines() if l.strip()]
+		self.rollingstone = [self.normalise_name(l.strip()) for l in open(f'{Artist.DATA_DIR}/rollingstone.txt','r').readlines() if l.strip()]
+		self.gigs_in_aus = [self.normalise_name(l.strip()) for l in open(f'{Artist.DATA_DIR}/data_atists_aus_gigs.txt','r').readlines() if l.strip()]
+		self.award_winners = {self.normalise_name(a): reward_lst for a, reward_lst in json.load(open(f'{Artist.DATA_DIR}/award_winners.json')).items()}
+		
 
 	def get_genres(self, url='http://everynoise.com/everynoise1d.cgi?scope=all'):
 		"""
@@ -177,7 +187,6 @@ class Artist:
 		  json.dump(self.artists, open(f'{Artist.DATA_DIR}/{file_}','w'))
 		else:
 		  print(f'didn\'t save artists to {file_} because artist list is empty!')
-	
 	
 	def spelledout_numbers_to_numbers(self, s):
 		"""
@@ -466,12 +475,17 @@ class Artist:
 
 				print(f'{n_}...')
 
-				r = json.loads(requests.get(f'http://api.songkick.com/api/3.0/artists/{id_sk}/gigography.json?apikey={self.SONGKICK_API_KEY}').text)
-
-				if 'resultsPage' in r:
-					if 'results' in r['resultsPage']:
-						if 'event' in r['resultsPage']['results']:
-							rc.update({'gigs': r['resultsPage']['results']['event']})
+				try:
+					r = json.loads(requests.get(f'http://api.songkick.com/api/3.0/artists/{id_sk}/gigography.json?apikey={self.SONGKICK_API_KEY}').text)
+	
+					if 'resultsPage' in r:
+						if 'results' in r['resultsPage']:
+							if 'event' in r['resultsPage']['results']:
+								rc.update({'gigs': r['resultsPage']['results']['event']})
+				except:
+					self.GIGERROR_ARTISTS.append({'name': n_, 'id_sk': id_sk})
+					print('can\'t get this artist\'s gigs!')
+					continue
 
 			if i%300 == 0:
 				print(f'{i}/{len(self.artists)} ({100*i/len(self.artists):.2f}%) artists processed...')
@@ -487,6 +501,45 @@ class Artist:
 				self.save_to_s3(self.artists[from_:to_], f'artdump_{dump_count}.json')
 
 				print(f'dump #{dump_count}')
+
+		json.dump(self.GIGERROR_ARTISTS, open(f'gigs_failed_.json','w'))
+
+		return self
+
+	def is_famous(self):
+		"""
+		label every artist who 
+
+			- achieved a gold or platinum status according to RIAA or
+			- is on one of the Billboard 'top 100' lists or
+			- is known to have had gigs in Australia (according to Songkick) or
+			- received some awards (in that case, add award names)
+		"""
+
+		for i, rc in enumerate(self.artists, 1):
+
+			n_ = rc.get('name', None)
+
+			if n_:
+				rc.update({'is_goldplatinum': 'y' if n_ in self.goldplatinum else 'n'})
+				rc.update({'is_billboard': 'y' if n_ in self.billboard else 'n'})
+				rc.update({'is_rollingstone': 'y' if n_ in self.rollingstone else 'n'})
+				rc.update({'gigs_in_aus': 'y' if n_ in self.gigs_in_aus else 'n'})
+				rc.update({'awards': self.award_winners[n_] if n_ in self.award_winners else None})
+
+		# show some stats
+
+		stats_ = defaultdict(int)
+
+		for r in self.artists:
+			for lab in 'is_goldplatinum is_billboard is_rollingstone gigs_in_aus'.split():
+				if r.get(lab, 'n') == 'y':
+					stats_[lab] += 1
+			if r.get('awards', None):
+				stats_['awards'] += 1
+
+		print('relatively famous artists:')
+		pprint(stats_)
 
 		return self
 
@@ -569,6 +622,18 @@ class Artist:
 
 		s3.upload_fileobj(Fileobj=io.BytesIO(json.dumps(what).encode()), Bucket='tega-uploads', Key=f'Igor/temp/gigographies/{s3file_}')
 
+		for i, rc in enumerate(json.load(open(artist_file)), 1):
+
+			n_ = rc.get('name', None)
+
+			if n_:
+				rc.update({'is_famous': 'y' if n_ in self.goldplatinum else 'n'})
+				rc.update({'is_billboard': 'y' if n_ in self.billboard else 'n'})
+				rc.update({'gigs_in_aus': 'y' if n_ in self.gigs_in_aus else 'n'})
+
+		
+		return self
+
 	def get_discogs(self):
 
 		def __find(element, child_name):
@@ -641,23 +706,23 @@ class Artist:
 		json.dump(artist_lst, open(f'{Artist.DATA_DIR}/discogs_.json', "w"), indent=4)
 
 
-
-
 			
 if __name__ == '__main__':
   
-  art = Artist()
+  art = Artist(artist_file='artists_sk.json')
   # art.normalize_all()
   # art.save('artists_n.json')
   # art.drop_unpopular()
   # art.save('artists_d.json')
   # art.add_songkick_id()
   # art.save('artists_sk.json')
-  art.add_gigs()
-  art.save('artists_gig.json')
-  art.save_to_s3(art.artists, 'artists_with_gigs.json')
+  # art.add_gigs()
+  # art.save('artists_gig.json')
+  # art.save_to_s3(art.artists, 'artists_with_gigs.json')
   # art.get_soundcloud()
   # art.save('artists_sc.json')
   # art.get_discogs()
+  art.is_famous()
+  art.save('platinum.json')
 
   print('done.')
