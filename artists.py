@@ -11,6 +11,9 @@ import os
 from pprint import pprint
 import soundcloud
 import spotipy
+import boto3
+import io
+import bson
 from spotipy.oauth2 import SpotifyClientCredentials
 
 class Artist:
@@ -34,6 +37,8 @@ class Artist:
 		self.SOUNDCLOUD_API_KEY = json.load(open(f'{Artist.CRED_DIR}/soundcloud.json'))['client_id']
 
 		self.DISCOGS_DUMP = f'{Artist.DATA_DIR}/discogs_20180401_artists.xml'
+
+		self.CREDENTIALS_S3 = json.load(open(f'{Artist.CRED_DIR}/s3.json'))
 
 	def get_genres(self, url='http://everynoise.com/everynoise1d.cgi?scope=all'):
 		"""
@@ -444,15 +449,22 @@ class Artist:
 		try:
 			self.artists = json.load(open(f'{Artist.DATA_DIR}/artists_sk.json'))
 			print(f'working with {len(self.artists)} artists')
+			print('self.artists is ', type(self.artists), ' of length ', len(self.artists))
 		except:
 			print('no file found')
 			sys.exit(0)
 
+		dump_count = 0
+
 		for i, rc in enumerate(self.artists, 1):
+
+			n_ = rc.get('name', None)
 
 			id_sk = rc.get('id_sk', None)
 
-			if id_sk:
+			if n_.strip() and id_sk:
+
+				print(f'{n_}...')
 
 				r = json.loads(requests.get(f'http://api.songkick.com/api/3.0/artists/{id_sk}/gigography.json?apikey={self.SONGKICK_API_KEY}').text)
 
@@ -461,11 +473,20 @@ class Artist:
 						if 'event' in r['resultsPage']['results']:
 							rc.update({'gigs': r['resultsPage']['results']['event']})
 
-			if i%100 == 0:
-				print(f'looking for gigs: {i}/{len(self.artists)} ({100*i/len(self.artists):.2f}%) artists processed...')
+			if i%300 == 0:
+				print(f'{i}/{len(self.artists)} ({100*i/len(self.artists):.2f}%) artists processed...')
 
-			if i%1000 == 0:
-				json.dump(self.artists[(i-1000):i], open(f'artdump_{i}.json','w'))
+			if i%5000 == 0:
+				
+				from_ = i - 5000
+				to_ = i
+
+				dump_count += 1
+
+				json.dump(self.artists[from_:to_], open(f'artdump_{dump_count}.json','w'))
+				self.save_to_s3(self.artists[from_:to_], f'artdump_{dump_count}.json')
+
+				print(f'dump #{dump_count}')
 
 		return self
 
@@ -539,6 +560,14 @@ class Artist:
 				print('name doesn\'t match..')
 
 		return self
+
+	def save_to_s3(self, what, s3file_):
+		"""
+		send file_ to an s3 bucket
+		"""
+		s3 = boto3.client('s3', **self.CREDENTIALS_S3)
+
+		s3.upload_fileobj(Fileobj=io.BytesIO(json.dumps(what).encode()), Bucket='tega-uploads', Key=f'Igor/temp/gigographies/{s3file_}')
 
 	def get_discogs(self):
 
@@ -626,7 +655,9 @@ if __name__ == '__main__':
   # art.save('artists_sk.json')
   art.add_gigs()
   art.save('artists_gig.json')
+  art.save_to_s3(art.artists, 'artists_with_gigs.json')
   # art.get_soundcloud()
   # art.save('artists_sc.json')
   # art.get_discogs()
 
+  print('done.')
