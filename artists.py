@@ -15,6 +15,7 @@ import boto3
 import io
 import bson
 from spotipy.oauth2 import SpotifyClientCredentials
+from birdy.twitter import UserClient
 
 class Artist:
 
@@ -456,14 +457,14 @@ class Artist:
 
 		
 		try:
-			self.artists = json.load(open(f'{Artist.DATA_DIR}/artists_sk.json'))
+			self.artists = json.load(open(f'{Artist.DATA_DIR}/artists_sk.json'))[54999:]
 			print(f'working with {len(self.artists)} artists')
 			print('self.artists is ', type(self.artists), ' of length ', len(self.artists))
 		except:
 			print('no file found')
 			sys.exit(0)
 
-		dump_count = 0
+		dump_count = 11
 
 		for i, rc in enumerate(self.artists, 1):
 
@@ -497,7 +498,7 @@ class Artist:
 
 				dump_count += 1
 
-				json.dump(self.artists[from_:to_], open(f'artdump_{dump_count}.json','w'))
+				# json.dump(self.artists[from_:to_], open(f'artdump_{dump_count}.json','w'))
 				self.save_to_s3(self.artists[from_:to_], f'artdump_{dump_count}.json')
 
 				print(f'dump #{dump_count}')
@@ -539,6 +540,7 @@ class Artist:
 				stats_['awards'] += 1
 
 		print('relatively famous artists:')
+
 		pprint(stats_)
 
 		return self
@@ -622,17 +624,47 @@ class Artist:
 
 		s3.upload_fileobj(Fileobj=io.BytesIO(json.dumps(what).encode()), Bucket='tega-uploads', Key=f'Igor/temp/gigographies/{s3file_}')
 
-		for i, rc in enumerate(json.load(open(artist_file)), 1):
-
-			n_ = rc.get('name', None)
-
-			if n_:
-				rc.update({'is_famous': 'y' if n_ in self.goldplatinum else 'n'})
-				rc.update({'is_billboard': 'y' if n_ in self.billboard else 'n'})
-				rc.update({'gigs_in_aus': 'y' if n_ in self.gigs_in_aus else 'n'})
-
 		
 		return self
+
+	def get_facebook_likes(self):
+		"""
+		how many likes an artist has at this time
+		"""
+		for i, rc in enumerate(self.artists, 1):
+
+			med = rc.get('media', None)
+			if med:
+				fb = rc['media'].get('facebook', None)
+				if fb:
+					try:
+						fb_soup = BeautifulSoup(requests.get(fb).text, "lxml")
+						likes_ = int(fb_soup.find("span", id="PagesLikesCountDOMID").text.strip().split()[0].replace(',',''))
+						rc.update({'facebook_likes': likes_})
+					except:
+						print(f'can\'t get likes from {fb}!')
+		return self
+
+	def get_twitter_followers(self):
+		"""
+		how many Twitter followers an artist has right now
+		"""
+		client = UserClient(**json.load(open(f'{Artist.CRED_DIR}/twitter.json')))
+
+		for i, rc in enumerate(self.artists, 1):
+
+			med = rc.get('media', None)
+			if med:
+				tw = rc['media'].get('twitter', None)
+				if tw:
+					try:
+						tw_followers_ = client.api.users.show.get(screen_name=tw).data['followers_count']
+						rc.update({'twitter_followers': tw_followers_})
+					except:
+						print(f'can\'t get followers from {tw}!')
+
+		return self
+
 
 	def get_discogs(self):
 
@@ -716,9 +748,9 @@ if __name__ == '__main__':
   # art.save('artists_d.json')
   # art.add_songkick_id()
   # art.save('artists_sk.json')
-  # art.add_gigs()
-  # art.save('artists_gig.json')
-  # art.save_to_s3(art.artists, 'artists_with_gigs.json')
+  art.add_gigs()
+  art.save('artists_gig.json')
+  art.save_to_s3(art.artists, 'artists_with_gigs.json')
   # art.get_soundcloud()
   # art.save('artists_sc.json')
   # art.get_discogs()
