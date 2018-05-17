@@ -665,6 +665,11 @@ class Artist:
 
 		return self
 
+	def get_youtube_likes(self):
+		"""
+		get likes for top videos from youtube
+		"""
+
 
 	def get_discogs(self):
 
