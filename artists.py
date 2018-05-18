@@ -38,6 +38,7 @@ class Artist:
 		self.SONGKICK_API_KEY = json.load(open(f'{Artist.CRED_DIR}/songkick.json'))['songkick_api_key']
 		self.SOUNDCLOUD_API_KEY = json.load(open(f'{Artist.CRED_DIR}/soundcloud.json'))['client_id']
 		self.CREDENTIALS_S3 = json.load(open(f'{Artist.CRED_DIR}/s3.json'))
+		self.YOUTUBE_DEVELOPER_KEY = json.load(open(f'{Artist.CRED_DIR}/youtube.json'))['developerKey']
 
 		self.DISCOGS_DUMP = f'{Artist.DATA_DIR}/discogs_20180401_artists.xml'
 
@@ -292,6 +293,56 @@ class Artist:
 			rc['name'] = self.normalise_name(rc['name'])
 
 		return self
+
+	def get_maxvideo_views(self):
+
+		youtube = build('youtube', 'v3', developerKey=self.YOUTUBE_DEVELOPER_KEY)
+
+		"""
+		first we need to find a channel id if possible, so below we obtain a response like this:
+		{'etag': '"DuHzAJ-eQIiCIp7p4ldoVcVAOeY/NXzz5erAJgzX9TKgE9cgokBBWBE"',
+		 'items': [{'etag': '"DuHzAJ-eQIiCIp7p4ldoVcVAOeY/xPEttlr0TAylTdn8Loh1-UmL2Og"',
+		            'id': {'channelId': 'UCPuKRCiD_avABa7v-m5a3kA',
+		                   'kind': 'youtube#channel'},
+		            'kind': 'youtube#searchResult',
+		            'snippet': {'channelId': 'UCPuKRCiD_avABa7v-m5a3kA',
+		                        'channelTitle': 'Kerri Chandler',
+		                        'description': '',
+		                        'liveBroadcastContent': 'none',
+		                        'publishedAt': '2010-10-13T12:24:42.000Z',
+		                        'thumbnails': {'default': {'url': 'https://yt3.ggpht.com/-15FSs4KjqzA/AAAAAAAAAAI/AAAAAAAAAAA/KkY6t0BICAw/s88-c-k-no-mo-rj-c0xffffff/photo.jpg'},
+		                                       'high': {'url': 'https://yt3.ggpht.com/-15FSs4KjqzA/AAAAAAAAAAI/AAAAAAAAAAA/KkY6t0BICAw/s800-c-k-no-mo-rj-c0xffffff/photo.jpg'},
+		                                       'medium': {'url': 'https://yt3.ggpht.com/-15FSs4KjqzA/AAAAAAAAAAI/AAAAAAAAAAA/KkY6t0BICAw/s240-c-k-no-mo-rj-c0xffffff/photo.jpg'}},
+		                        'title': 'Kerri Chandler'}}],
+		 'kind': 'youtube#searchListResponse',
+		 'pageInfo': {'resultsPerPage': 5, 'totalResults': 1},
+		 'regionCode': 'AU'}
+		"""
+		channel_id = channel_title = None
+
+		try:
+			r = yt.search().list(q="ianpooleyofc", type="channel", part="snippet").execute()
+			channel_id = r['items'][0]['id']['channelId']
+			channel_title = r['items'][0]['snippet']['channelTitle']
+		except:
+			print('can\'t find any channels')
+		
+		print('channel ID=',channel_id)
+		
+		if channel_id:
+			# maxResults parameter specifies the maximum number of items that should be returned in the result set
+			res = yt.search().list(q="pooley", type="video", part="id,snippet", maxResults=1, order="viewCount", channelId=channel_id).execute()
+		
+			for r in res["items"]:
+				video_titles.append(r["snippet"]["title"])
+				video_ids.append(r["id"]["videoId"])
+			
+			for i in video_ids:
+				res1 = yt.videos().list(part='statistics', id=i).execute()
+				for k in res1["items"]:
+					print(k['statistics'])
+
+
 
 	def drop_unpopular(self):
 		"""
@@ -665,11 +716,6 @@ class Artist:
 
 		return self
 
-	def get_youtube_likes(self):
-		"""
-		get likes for top videos from youtube
-		"""
-
 
 	def get_discogs(self):
 
@@ -716,7 +762,8 @@ class Artist:
 				
 				# found some artist's information; make a dictionary to collect
 				art_dict = defaultdict()
-			
+				
+				art_dict["id_dg"] = __find(a, "id")
 				art_dict["name"] = __find(a, "name")
 				art_dict["real_name"] = __find(a, "realname")
 				
