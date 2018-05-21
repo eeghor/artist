@@ -558,43 +558,51 @@ class Artist:
 
 		return self
 
-	def is_famous(self):
+	def _popularity(self, artist_name=None):
 		"""
-		label every artist who 
+		gather popularity measures for a single artist
+		"""
+		if not artist_name:
+			raise ValueError(f'you forgot to provide an artist\'s name!')
+
+		inf_ = defaultdict()
+
+		"""
+		check if the artist
 
 			- achieved a gold or platinum status according to RIAA or
 			- is on one of the Billboard 'top 100' lists or
 			- is known to have had gigs in Australia (according to Songkick) or
 			- received some awards (in that case, add award names)
 		"""
+		inf_['is_goldplatinum'] = 'y' if artist_name in self.goldplatinum else 'n'
+		inf_['is_billboard'] = 'y' if artist_name in self.billboard else 'n'
+		inf_['is_rollingstone'] = 'y' if artist_name in self.rollingstone else 'n'
+		inf_['gigs_in_aus'] = 'y' if artist_name in self.gigs_in_aus else 'n'
+		inf_['awards'] = self.award_winners[artist_name] if artist_name in self.award_winners else None
 
-		for i, rc in enumerate(self.artists, 1):
-
-			n_ = rc.get('name', None)
-
-			if n_:
-				rc.update({'is_goldplatinum': 'y' if n_ in self.goldplatinum else 'n'})
-				rc.update({'is_billboard': 'y' if n_ in self.billboard else 'n'})
-				rc.update({'is_rollingstone': 'y' if n_ in self.rollingstone else 'n'})
-				rc.update({'gigs_in_aus': 'y' if n_ in self.gigs_in_aus else 'n'})
-				rc.update({'awards': self.award_winners[n_] if n_ in self.award_winners else None})
+		# rc.update({'is_goldplatinum': 'y' if n_ in self.goldplatinum else 'n'})
+		# rc.update({'is_billboard': 'y' if n_ in self.billboard else 'n'})
+		# rc.update({'is_rollingstone': 'y' if n_ in self.rollingstone else 'n'})
+		# rc.update({'gigs_in_aus': 'y' if n_ in self.gigs_in_aus else 'n'})
+		# rc.update({'awards': self.award_winners[n_] if n_ in self.award_winners else None})
 
 		# show some stats
 
-		stats_ = defaultdict(int)
+		# stats_ = defaultdict(int)
 
-		for r in self.artists:
-			for lab in 'is_goldplatinum is_billboard is_rollingstone gigs_in_aus'.split():
-				if r.get(lab, 'n') == 'y':
-					stats_[lab] += 1
-			if r.get('awards', None):
-				stats_['awards'] += 1
+		# for r in self.artists:
+		# 	for lab in 'is_goldplatinum is_billboard is_rollingstone gigs_in_aus'.split():
+		# 		if r.get(lab, 'n') == 'y':
+		# 			stats_[lab] += 1
+		# 	if r.get('awards', None):
+		# 		stats_['awards'] += 1
 
-		print('relatively famous artists:')
+		# print('relatively famous artists:')
 
-		pprint(stats_)
+		# pprint(stats_)
 
-		return self
+		return inf_
 
 	def get_soundcloud(self):
 		"""
@@ -800,13 +808,14 @@ if __name__ == '__main__':
   # art.save('artists_d.json')
   # art.add_songkick_id()
   # art.save('artists_sk.json')
-  art.add_gigs()
-  art.save('artists_gig.json')
-  art.save_to_s3(art.artists, 'artists_with_gigs.json')
+  # art.add_gigs()
+  # art.save('artists_gig.json')
+  # art.save_to_s3(art.artists, 'artists_with_gigs.json')
   # art.get_soundcloud()
   # art.save('artists_sc.json')
   # art.get_discogs()
-  art.is_famous()
-  art.save('platinum.json')
+  # art.is_famous()
+  # art.save('platinum.json')
+  print(art._popularity('rolling stones'))
 
   print('done.')
