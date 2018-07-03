@@ -32,6 +32,7 @@ class Artist:
 
 		self.create_new = create_new
 		self.ARTIST_FILE = f'{Artist.DATA_DIR}/{artist_file}'
+		self.GENRE_FILE = f'{Artist.DATA_DIR}/genres.txt'
 
 		if not self.create_new:
 
@@ -55,6 +56,16 @@ class Artist:
 		self.CREDENTIALS_S3 = json.load(open(f'{Artist.CRED_DIR}/s3.json'))
 		
 		self.DISCOGS_DUMP = f'{Artist.DATA_DIR}/discogs_20180401_artists.xml'
+
+		try:
+			self.GENRES = list({g.strip().lower() for g in open(self.GENRE_FILE).readlines() if g.strip()})
+		except:
+			self.GENRES = self.get_genres()
+			with open(self.GENRE_FILE,'w') as f:
+				for g in self.GENRES:
+					f.write(f'{g}\n')
+
+		print(f'genres: {len(self.GENRES)}')
 
 		self.GIGERROR_ARTISTS = []
 
@@ -85,6 +96,8 @@ class Artist:
 		returns a dictionary containing artist information;
 		this information is collected via searching by genre, i.e. we count on our list of genres being 
 		comprehensive so having collected artists for each genres we will collect all artist
+
+		input: genres_ is a list of genres
 		"""  
 
 		print('searching for artists by genre...')
