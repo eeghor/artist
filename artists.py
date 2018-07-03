@@ -13,33 +13,47 @@ import soundcloud
 import spotipy
 import boto3
 import io
-import bson
+# import bson
 from spotipy.oauth2 import SpotifyClientCredentials
 from birdy.twitter import UserClient
 
 class Artist:
+
+	"""
+	Collect and match artist information from multiple sources
+	"""
 
 	CRED_DIR = 'credentials'
 	DATA_DIR = 'data'
 
 	MEDIA = 'facebook twitter youtube wikipedia soundcloud equipboard instagram last.fm'.split()
 
-	def __init__(self, refresh=False, artist_file=None):
+	def __init__(self, create_new=False, artist_file=None):
 
-		self.refresh = refresh
-		self.artist_file = artist_file
+		self.create_new = create_new
+		self.ARTIST_FILE = f'{Artist.DATA_DIR}/{artist_file}'
 
-		if not self.refresh:
-			self.artists = json.load(open(f'{Artist.DATA_DIR}/{self.artist_file}'))
-			print(f'loaded {len(self.artists)} artists from {self.artist_file}')
+		if not self.create_new:
+
+			self.artists = json.load(open(self.ARTIST_FILE))
+			print(f'loaded {len(self.artists)} artists from {self.ARTIST_FILE}')
+
 		else:
+
+			print('starting from an empty artist list...')
 			self.artists = []
 
 		self.SONGKICK_API_KEY = json.load(open(f'{Artist.CRED_DIR}/songkick.json'))['songkick_api_key']
-		self.SOUNDCLOUD_API_KEY = json.load(open(f'{Artist.CRED_DIR}/soundcloud.json'))['client_id']
-		self.CREDENTIALS_S3 = json.load(open(f'{Artist.CRED_DIR}/s3.json'))
-		self.YOUTUBE_DEVELOPER_KEY = json.load(open(f'{Artist.CRED_DIR}/youtube.json'))['developerKey']
+		print('loaded songkick api key...')
 
+		self.SOUNDCLOUD_API_KEY = json.load(open(f'{Artist.CRED_DIR}/soundcloud.json'))['client_id']
+		print('loaded soundcloud api key...')
+
+		self.YOUTUBE_DEVELOPER_KEY = json.load(open(f'{Artist.CRED_DIR}/youtube.json'))['developerKey']
+		print('loaded youtube developer key...')
+
+		self.CREDENTIALS_S3 = json.load(open(f'{Artist.CRED_DIR}/s3.json'))
+		
 		self.DISCOGS_DUMP = f'{Artist.DATA_DIR}/discogs_20180401_artists.xml'
 
 		self.GIGERROR_ARTISTS = []
@@ -54,7 +68,7 @@ class Artist:
 
 	def get_genres(self, url='http://everynoise.com/everynoise1d.cgi?scope=all'):
 		"""
-		return a list of all genres from Every Noise at Once
+		returns a list of all genres from Every Noise at Once
 		"""
 		soup = BeautifulSoup(requests.get(url).text, 'lxml')
 	
@@ -69,8 +83,12 @@ class Artist:
 	def get_artists_by_genre(self, genres_):
 		"""
 		returns a dictionary containing artist information;
-		this information is collected via searching by genre
+		this information is collected via searching by genre, i.e. we count on our list of genres being 
+		comprehensive so having collected artists for each genres we will collect all artist
 		"""  
+
+		print('searching for artists by genre...')
+
 		try:
 			client_credentials_manager = SpotifyClientCredentials(**json.load(open(f'{Artist.CRED_DIR}/spotify.json')))
 		except:
@@ -81,8 +99,8 @@ class Artist:
 	
 		MX = 4000
 	
-		# keep artist names already collected here
-		artist_names = set()
+		# keep artist IDs already collected here
+		artist_ids = set()
 	
 		t0 = time.time()
 	
@@ -123,41 +141,39 @@ class Artist:
 				"""      
 				for a in res['artists']['items']:
 					# note that a is a dictionary with artist information
-					if len(a["name"]) == len(a["name"].encode()):   # don't allow chinese symbols
-						if a['name'].lower() not in artist_names:
-							artist_names.add(a['name'].lower())
+					if len(a["name"]) == len(a["name"].encode()):   # don't allow Chinese symbols
+						if a['id'] not in artist_ids:
+							artist_ids.add(a['id'])
 							self.artists.append(a)
-						  
-				print(len(self.artists), end="")
-				print("...ok")
 		  
-		print("elapsed time: {:.0f} min {:.0f} sec".format(*divmod(time.time() - t0, 60)))
+		print(f'done. collected {len(artist_ids)} artists.' + ' elapsed time: {:.0f} min {:.0f} sec'.format(*divmod(time.time() - t0, 60)))
 		  
 		return self
 
-	def get_artists_by_name(self, name):
-		"""
-		returns a dictionary containing artist information
-		"""  
+	# def get_artists_by_name(self, name):
+	# 	"""
+	# 	returns a dictionary containing artist information
+	# 	"""  
 
-		try:
-			client_credentials_manager = SpotifyClientCredentials(**json.load(open(f'{Artist.CRED_DIR}/spotify.json','r')))
-		except:
-			print(f'can\'t read the spotify credentials!')
-			sys.exit(0)
+	# 	try:
+	# 		client_credentials_manager = SpotifyClientCredentials(**json.load(open(f'{Artist.CRED_DIR}/spotify.json','r')))
+	# 	except:
+	# 		print(f'can\'t read spotify credentials!')
+	# 		sys.exit(0)
 	
-		sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+	# 	sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
 
-		res = sp.search(q='artist:' + name, type='artist', limit=3)
+	# 	res = sp.search(q='artist:' + name, type='artist', limit=3)
 
-		return res
+	# 	return res
 
 	def get_artist_from_songkick(self, name):
 		"""
 		get basic artist information from Songkick; it's not much, specifically:
+
 		{'displayName': 'Placebo',   # The artist name, as it is displayed on Songkick
 			'id': 324967,   # The Songkick ID of the artist
-			# MusicBrainz identifiers for this artist. It is possible that an artist has mutliple MusicBrainz IDs if we are not sure which is correct
+			# MusicBrainz identifiers for this artist. It is possible that an artist has multiple MusicBrainz IDs if we are not sure which is correct
 			'identifier': [{'eventsHref': 'http://api.songkick.com/api/3.0/artists/mbid:81b9963b-7ff7-47f7-9afb-fe454d8db43c/calendar.json',
 				 'href': 'http://api.songkick.com/api/3.0/artists/mbid:81b9963b-7ff7-47f7-9afb-fe454d8db43c.json',
 				 'mbid': '81b9963b-7ff7-47f7-9afb-fe454d8db43c',
@@ -170,6 +186,8 @@ class Artist:
 		'onTourUntil': '2018-06-23',
 		# The URI of the artist on Songkick
 		'uri': 'http://www.songkick.com/artists/324967-placebo?utm_source=45672&utm_medium=partner'}
+
+		all we are interested at this stage is the artist name and Songkick ID
 		"""
 		r = requests.get(f'http://api.songkick.com/api/3.0/search/artists.json?query={name}&apikey={self.SONGKICK_API_KEY}').text 
 
@@ -180,15 +198,19 @@ class Artist:
 
 		return {'name': res['displayName'], 'id_sk': res['id']}
 	
-	def save(self, file_):
+	def save(self, file_=None):
 	
 		if not os.path.exists(Artist.DATA_DIR):
+
 		  os.mkdir(Artist.DATA_DIR)
 	
 		if self.artists:
-		  json.dump(self.artists, open(f'{Artist.DATA_DIR}/{file_}','w'))
+
+		  json.dump(self.artists, open(self.ARTIST_FILE if not file_ else f'{Artist.DATA_DIR}/{file_}','w'))
+
 		else:
-		  print(f'didn\'t save artists to {file_} because artist list is empty!')
+
+		  print('didn\'t save artists because artist list is empty!')
 	
 	def spelledout_numbers_to_numbers(self, s):
 		"""
@@ -213,7 +235,7 @@ class Artist:
 		"""
 		create an ordered dictionary mapping spelled numbers to numbers in
 		digits; note that the order is important because we want to search
-		for spelled numbers starting from the compount ones like twenty two,
+		for spelled numbers starting from the compound ones like twenty two,
 		then try to find the rest
 		"""
 		
@@ -266,7 +288,7 @@ class Artist:
 		# remove the and a
 		name = re.sub(r'^(the|a)\s+','', name)
 
-		# remove multiple whitespaces
+		# remove multiple white spaces
 		name = wsp.sub(' ',name)
 	
 		# spelled numbers to numbers
@@ -275,7 +297,7 @@ class Artist:
 		# replace and with &
 		name = name.replace(' and ',' & ')
 		 
-		# remove multiple whitespaces
+		# remove multiple white spaces
 		name = wsp.sub(' ',name)
 		
 		# finally, strip
@@ -284,7 +306,9 @@ class Artist:
 		return name
 
 	def normalize_all(self):
-		
+		"""
+		normalize all artist names we can find in self.artists
+		"""
 		if not self.artists:
 			print('the artist list is empty!')
 			raise AssertionError
@@ -300,6 +324,7 @@ class Artist:
 
 		"""
 		first we need to find a channel id if possible, so below we obtain a response like this:
+
 		{'etag': '"DuHzAJ-eQIiCIp7p4ldoVcVAOeY/NXzz5erAJgzX9TKgE9cgokBBWBE"',
 		 'items': [{'etag': '"DuHzAJ-eQIiCIp7p4ldoVcVAOeY/xPEttlr0TAylTdn8Loh1-UmL2Og"',
 		            'id': {'channelId': 'UCPuKRCiD_avABa7v-m5a3kA',
@@ -327,11 +352,10 @@ class Artist:
 		except:
 			print('can\'t find any channels')
 		
-		print('channel ID=',channel_id)
-		
 		if channel_id:
 			# maxResults parameter specifies the maximum number of items that should be returned in the result set
-			res = yt.search().list(q="pooley", type="video", part="id,snippet", maxResults=1, order="viewCount", channelId=channel_id).execute()
+			res = yt.search().list(q="pooley", type="video", part="id,snippet", 
+				maxResults=1, order="viewCount", channelId=channel_id).execute()
 		
 			for r in res["items"]:
 				video_titles.append(r["snippet"]["title"])
@@ -342,16 +366,18 @@ class Artist:
 				for k in res1["items"]:
 					print(k['statistics'])
 
-
-
-	def drop_unpopular(self):
+	def drop_unpopular(self, local=True):
 		"""
-		following normalization, some artists may suddenly have the same name; to disambiguate to 
-		simply keep the most popular artist only;
+		following normalization, some artists in self.artists may suddenly have the same name; to disambiguate we 
+		simply keep the most popular artist;
 
 		also, drop artists whose popularity is zero
-
 		"""
+		print('dropping unpopular artists...')
+
+		if local:
+			self.artists = json.load(open(self.ARTIST_FILE))
+			print(f'working with local artist file ({len(self.artists)} artists)...')
 
 		art_before = len(self.artists)
 
@@ -359,8 +385,7 @@ class Artist:
 
 		art_after = len(self.artists)
 
-		print(f'removed {art_after - art_before} unpopular artists...')
-
+		print(f'removed {art_after - art_before} artists...')
 
 		names_ambig = {k: v for k, v in Counter([rc['name'] for rc in self.artists]).items() if v > 1}
 
@@ -373,6 +398,7 @@ class Artist:
 			name_ = rc['name']
 
 			if name_ in names_ambig:
+
 				if name_ not in name_ids_keep:
 					name_ids_keep.update({name_: {'id': rc['id'], 
 													'popularity': rc['popularity']}})
@@ -386,6 +412,7 @@ class Artist:
 		for rc in self.artists:
 
 			if rc['name'] in name_ids_keep:  # name is ambiguous
+
 				if rc['id'] == name_ids_keep[rc['name']]['id']:
 					dic_.append(rc)
 			else:
@@ -399,8 +426,11 @@ class Artist:
 
 	def add_songkick_id(self):
 		"""
-		for every artist on the list try to find a Songkick id
+		for every artist from self.artists try to find a Songkick id
 		"""
+
+		print('searching for songkick ids...')
+
 		match_ = []
 		nomatch_ = []
 
@@ -409,8 +439,12 @@ class Artist:
 		for i, rc in enumerate(self.artists, 1):
 
 			name_ = rc['name']
+
+			# search on Songkick by name
 			sk_art = self.get_artist_from_songkick(name_)
+
 			if sk_art['name']:
+
 				if self.normalise_name(sk_art['name']) == name_:
 					rc.update({'id_sk': sk_art['id_sk']})
 					match_.append(name_)
@@ -421,7 +455,7 @@ class Artist:
 
 			if i%100 == 0:
 
-				print(f'looking for songkick ids: {i}/{len(self.artists)} ({100*i/len(self.artists):.2f}%) artists processed...')
+				print(f'{i}/{len(self.artists)} ({100*i/len(self.artists):.2f}%) artists processed...')
 				print(f'matched {len(match_)}, didn\'t match {len(nomatch_)}')
 				print(f'time: {time.time() - t0:.0f} sec / 100')
 
@@ -505,12 +539,9 @@ class Artist:
 		  "ageRestriction": null
 		}, 
 		"""
-
-		
 		try:
 			self.artists = json.load(open(f'{Artist.DATA_DIR}/artists_sk.json'))[54999:]
 			print(f'working with {len(self.artists)} artists')
-			print('self.artists is ', type(self.artists), ' of length ', len(self.artists))
 		except:
 			print('no file found')
 			sys.exit(0)
